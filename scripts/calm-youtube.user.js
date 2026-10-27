@@ -2,8 +2,8 @@
 // @name         Calm YouTube (remove Shorts + grayscale thumbnails)
 // @namespace    https://github.com/erkovany/Browserkit
 // @homepageURL  https://github.com/erkovany/Browserkit
-// @version      2.14.2
-// @description  Calmer YouTube: pinned channel and History shortcuts, adjustable feed card sizes, optional Mix filter, toggle Shorts and comments, hide featured shelves and Premium/membership promo cards, toggle grayscale/color preview thumbnails from the masthead (color on hover in grayscale mode), a "TV" watch layout (comments hidden by default, related grid + Mix carousel below a big player), and a description toggle button. Colors come from YouTube's own theme (turn on Dark). Does not touch direct /shorts/ URLs or the video you're watching.
+// @version      2.15.0
+// @description  Customize YouTube thumbnails, Shorts, comments, feeds, pinned channels and History. Video-page settings control layout, recommendations, card sizes, playlists, description defaults and ambient lighting.
 // @author       yerkovan
 // @match        https://www.youtube.com/*
 // @match        https://m.youtube.com/*
@@ -20,8 +20,41 @@
   function startCalmYouTube() {
     const pageRoot = document.documentElement;
     if (!pageRoot) return false;
-    if (pageRoot.dataset.cytRunning === '2.14.0') return true;
-    pageRoot.dataset.cytRunning = '2.14.0';
+    if (pageRoot.dataset.cytRunning === '2.15.0') return true;
+    pageRoot.dataset.cytRunning = '2.15.0';
+
+    const WATCH_KEY = 'cyt-watch-settings';
+    const watchOptions = [
+      { key: 'layout', label: 'Sayfa düzeni', initial: 'tv', choices: [['native', 'YouTube varsayılanı'], ['tv', 'Geniş oynatıcı + altta öneriler']] },
+      { key: 'recommendations', label: 'Önerileri göster', initial: 'show', choices: [['show', 'Açık'], ['hide', 'Kapalı']] },
+      { key: 'cards', label: 'Video altındaki kart boyutu', initial: 'medium', choices: [['small', 'Küçük'], ['medium', 'Orta'], ['large', 'Büyük']] },
+      { key: 'playlist', label: 'Oynatma listesi görünümü', initial: 'horizontal', choices: [['native', 'YouTube varsayılanı'], ['horizontal', 'Yatay şerit']] },
+      { key: 'description', label: 'Açıklamanın başlangıç durumu', initial: 'remember', choices: [['closed', 'Kapalı'], ['open', 'Açık'], ['remember', 'Son durumu hatırla']] },
+      { key: 'ambient', label: 'Arka plan ışığı (Ambient mode)', initial: 'off', choices: [['native', 'YouTube ayarını kullan'], ['off', 'Kapat']] },
+    ];
+    function readWatchSettings() {
+      let saved;
+      try { saved = JSON.parse(localStorage.getItem(WATCH_KEY)); } catch {}
+      return Object.fromEntries(watchOptions.map(option => [option.key,
+        option.choices.some(([value]) => value === saved?.[option.key]) ? saved[option.key] : option.initial]));
+    }
+    let watchSettings = readWatchSettings();
+    function applyWatchSettings(changed = []) {
+      for (const option of watchOptions) pageRoot.setAttribute('data-cyt-watch-' + option.key, watchSettings[option.key]);
+      window.dispatchEvent(new CustomEvent('cyt-watch-settings-changed', { detail: changed }));
+      if (changed.includes('layout') || changed.includes('recommendations')) {
+        requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+      }
+    }
+    applyWatchSettings();
+    window.addEventListener('storage', event => {
+      try { if (event.storageArea !== localStorage) return; } catch { return; }
+      if (event.key !== WATCH_KEY && event.key !== null) return;
+      const next = readWatchSettings();
+      const changed = watchOptions.filter(option => next[option.key] !== watchSettings[option.key]).map(option => option.key);
+      watchSettings = next;
+      applyWatchSettings(changed);
+    });
 
     /* CSS handles Shorts and layout; small controllers add interactive buttons. */
 
@@ -30,7 +63,7 @@
 
       // Version stamp — run `document.documentElement.dataset.cytVersion` in the
       // console to confirm which build Tampermonkey actually loaded.
-      document.documentElement.dataset.cytVersion = '2.14.0';
+      document.documentElement.dataset.cytVersion = '2.15.0';
 
       for (const key of ['cyt-color', 'cyt-shorts', 'cyt-comments', 'cyt-hide-mixes']) {
         try {
@@ -189,7 +222,7 @@
       inset: 56px 16px auto auto;
       margin: 0;
       padding: 20px;
-      width: min(280px, calc(100vw - 32px));
+      width: min(360px, calc(100vw - 32px));
       box-sizing: border-box;
       border: 1px solid var(--yt-spec-10-percent-layer, #ccc);
       border-radius: 12px;
@@ -202,6 +235,9 @@
       background: var(--yt-spec-menu-background, #282828);
       color: var(--yt-spec-text-primary, #f1f1f1);
     }
+    #cyt-watch-settings { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--yt-spec-10-percent-layer, #888); }
+    #cyt-watch-settings h3 { margin: 0 0 12px; font-size: 14px; }
+    #cyt-settings-panel select:disabled { opacity: 0.5; }
     #cyt-settings-panel h2 { margin: 0 0 16px; font-size: 16px; }
     #cyt-settings-panel label { display: block; }
     #cyt-settings-panel select {
@@ -269,191 +305,90 @@
     #cyt-expanded-pins a { padding: 8px 12px; font: 14px/20px Roboto, Arial, sans-serif; }
     #cyt-expanded-pins .cyt-channel-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    /* =========================================================
-       6. Watch-page "TV" LAYOUT (layout only — no colors).
-       Default on every /watch page, pure CSS. Two moves:
-         a) hide the comment section
-         b) reflow related/mix into a grid BELOW a big player
-            (instead of the right-hand rail), with related cards
-            flipped from horizontal to vertical
-       All COLOR is intentionally left to YouTube's own theme — turn
-       on YouTube's Dark theme (Appearance -> Dark) and the whole
-       watch page, masthead included, is consistently dark. This
-       avoids fighting YouTube's per-theme colors from CSS.
-       Scoped to :not([fullscreen]) so fullscreen stays native.
-       ========================================================= */
-    ytd-watch-flexy {
-      --cyt-radius: 12px;   /* shape only: rounded related thumbnails */
-    }
-
-    /* --- (a) Hide comments ----------------------------------- */
-    html:not(.cyt-comments) ytd-watch-flexy #comments {
+    ytd-watch-flexy { --cyt-radius: 12px; --cyt-related-min: 300px; }
+    html[data-cyt-watch-cards="small"] ytd-watch-flexy { --cyt-related-min: 240px; }
+    html[data-cyt-watch-cards="large"] ytd-watch-flexy { --cyt-related-min: 380px; }
+    html:not(.cyt-comments) ytd-watch-flexy #comments { display: none !important; }
+    html[data-cyt-watch-recommendations="hide"] ytd-watch-flexy #secondary #related {
       display: none !important;
     }
-
-    /* --- (b) TV-grid layout ---------------------------------- */
-    /* Stack the two columns: title/info full-width first, related below. */
-    ytd-watch-flexy:not([fullscreen]) #columns {
+    html[data-cyt-watch-layout="tv"] ytd-watch-flexy:not([fullscreen]) #columns {
       display: block !important;
       max-width: none !important;
       margin: 0 !important;
-      padding: 16px 24px !important;
+      padding: 16px clamp(8px, 2vw, 24px) !important;
+      box-sizing: border-box !important;
+      min-width: 0 !important;
     }
-    ytd-watch-flexy:not([fullscreen]) #primary,
-    ytd-watch-flexy:not([fullscreen]) #primary-inner,
-    ytd-watch-flexy:not([fullscreen]) #secondary,
-    ytd-watch-flexy:not([fullscreen]) #secondary-inner {
+    html[data-cyt-watch-layout="tv"] ytd-watch-flexy:not([fullscreen]) #primary, html[data-cyt-watch-layout="tv"] ytd-watch-flexy:not([fullscreen]) #primary-inner, html[data-cyt-watch-layout="tv"] ytd-watch-flexy:not([fullscreen]) #secondary, html[data-cyt-watch-layout="tv"] ytd-watch-flexy:not([fullscreen]) #secondary-inner {
       width: 100% !important;
       max-width: none !important;
+      min-width: 0 !important;
       padding: 0 !important;
+      box-sizing: border-box !important;
     }
-
-    /* Lay the related/mix cards out as a responsive grid. */
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-item-section-renderer > #contents {
+    html[data-cyt-watch-layout="tv"] ytd-watch-flexy:not([fullscreen]) #secondary ytd-item-section-renderer > #contents {
       display: grid !important;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--cyt-related-min)), 1fr)) !important;
       gap: 16px !important;
       padding: 4px !important;
     }
+    html[data-cyt-watch-layout="tv"] ytd-watch-flexy:not([fullscreen]) #secondary yt-lockup-view-model { border-radius: var(--cyt-radius) !important; min-width: 0 !important; }
+    html[data-cyt-watch-layout="tv"] ytd-watch-flexy:not([fullscreen]) #secondary .ytLockupViewModelHost { flex-direction: column !important; width: auto !important; }
+    html[data-cyt-watch-layout="tv"] ytd-watch-flexy:not([fullscreen]) #secondary a.ytLockupViewModelContentImage { width: 100% !important; max-width: none !important; margin: 0 !important; }
+    html[data-cyt-watch-layout="tv"] ytd-watch-flexy:not([fullscreen]) #secondary .ytThumbnailViewModelImage, html[data-cyt-watch-layout="tv"] ytd-watch-flexy:not([fullscreen]) #secondary .ytThumbnailViewModelImage img { width: 100% !important; height: auto !important; }
+    html[data-cyt-watch-layout="tv"] ytd-watch-flexy:not([fullscreen]) #secondary .ytLockupViewModelMetadata { padding: 10px 12px 12px !important; }
 
-    /* Flip each related card from horizontal (thumb-left) to vertical
-       (thumb-on-top). Shape only — colors come from YouTube's theme. */
-    ytd-watch-flexy:not([fullscreen]) #secondary yt-lockup-view-model {
-      border-radius: var(--cyt-radius) !important;
-      overflow: hidden !important;
-    }
-    ytd-watch-flexy:not([fullscreen]) #secondary .ytLockupViewModelHost {
-      flex-direction: column !important;
-      width: auto !important;
-    }
-    ytd-watch-flexy:not([fullscreen]) #secondary a.ytLockupViewModelContentImage {
-      width: 100% !important;
-      max-width: none !important;
-      margin: 0 !important;
-    }
-    ytd-watch-flexy:not([fullscreen]) #secondary .ytThumbnailViewModelImage,
-    ytd-watch-flexy:not([fullscreen]) #secondary .ytThumbnailViewModelImage img {
-      width: 100% !important;
-      height: auto !important;
-    }
-    ytd-watch-flexy:not([fullscreen]) #secondary .ytLockupViewModelMetadata {
-      padding: 10px 12px 12px !important;
-    }
-
-    /* The "Mix" panel (ytd-playlist-panel-renderer) is a separate widget. Turn its
-       vertical list into a SINGLE horizontal-scroll row of vertical cards. We leave
-       the panel's own height alone so its native collapse/expand keeps working. */
-
-    /* Trim the header down to just the title: remove the "save playlist" 3-dot
-       menu, the "Mixes are playlists..." subtitle, and the collapse/expand chevron
-       (#trailing-button) — we keep the Mix permanently expanded, so the toggle is
-       pointless. The title bar stays as the always-on header. */
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer #end-actions-in-header,
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer #playlist-actions,
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer #trailing-button,
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer .publisher {
-      display: none !important;
-    }
-
-    /* Lock the header to the "Next: …" version (with the "Mix - …" line beneath)
-       and drop the plain "Mix - …"-only title, so it never swaps. The header has an
-       on-tap toggle (onToggleExpanded); disable pointer events on it so clicking the
-       title no longer switches states. The carousel below stays interactive (it's a
-       sibling of .header, not inside it). Both header variants are always present in
-       the DOM and populated, so we just force which one shows. */
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer .header {
-      pointer-events: none !important;
-      /* Restore the subtle gray header background the "Next:" bar used to have.
-         Use YouTube's theme-aware chip background so it shows in BOTH light and
-         dark themes (a plain translucent white was invisible in light mode). */
-      background-color: var(--yt-spec-badge-chip-background, rgba(128, 128, 128, 0.15)) !important;
-    }
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer #header-description > h3:not(#next-video-title) {
-      display: none !important;   /* hide the "Mix - …"-only title */
-    }
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer #next-video-title,
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer .byline-title {
-      display: block !important;  /* always show "Next: …" + the mix name */
-    }
-
-    /* One row, scroll right for more. Always shown (not scoped to :not([collapsed]))
-       so the carousel stays open even if YouTube defaults the panel collapsed — the
-       two-ID specificity here beats YouTube's [collapsible][collapsed] .playlist-items
-       hide rule. width:100% caps the row so overflow-x actually scrolls (without it,
-       #items grows to fit every card and never overflows). */
-    /* YouTube gives the panel/list a fixed height (height:100%), so the taller-than-
-       the-strip cards overflow vertically; overflow-y:hidden then turns #items into a
-       *clipped vertical* scroll container that eats the mouse wheel (page won't scroll
-       over the Mix, horizontal feels flaky). Forcing height:auto removes the vertical
-       overflow entirely — #items is then only an x-scroller, so vertical wheel passes
-       through to the page and horizontal scroll is stable. */
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer > #container {
-      height: auto !important;
-      max-height: none !important;
-    }
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer #items {
+    html[data-cyt-watch-playlist="horizontal"] ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer:not([collapsed]) > #container { height: auto !important; max-height: none !important; position: relative !important; }
+    html[data-cyt-watch-playlist="horizontal"] ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer:not([collapsed]) #items {
       display: flex !important;
-      flex-direction: row !important;
-      flex-wrap: nowrap !important;
+      flex-flow: row nowrap !important;
       overflow-x: auto !important;
       overflow-y: hidden !important;
       overscroll-behavior-x: contain !important;
-      height: auto !important;      /* the key fix: no vertical overflow → no wheel trap */
+      height: auto !important;
       max-height: none !important;
       gap: 12px !important;
       padding: 4px 4px 8px !important;
       width: 100% !important;
       max-width: 100% !important;
-      min-width: 0 !important;      /* flex items default to min-width:auto, which
-                                       lets #items grow to content width instead of
-                                       scrolling; 0 lets it shrink so overflow-x works */
+      min-width: 0 !important;
       box-sizing: border-box !important;
+      scrollbar-color: var(--yt-spec-text-secondary, #888) transparent;
+      scrollbar-width: thin;
     }
-    /* Keep the horizontal scrollbar visible so it's obvious the row scrolls. */
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer #items::-webkit-scrollbar {
-      height: 8px !important;
-    }
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer #items::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.3) !important;
-      border-radius: 4px !important;
-    }
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-video-renderer {
-      flex: 0 0 210px !important;   /* original compact Mix card width */
+    html[data-cyt-watch-playlist="horizontal"] ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer:not([collapsed]) #items::-webkit-scrollbar { height: 8px !important; }
+    html[data-cyt-watch-playlist="horizontal"] ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer:not([collapsed]) #items::-webkit-scrollbar-thumb { background: var(--yt-spec-text-secondary, #888) !important; border-radius: 4px; }
+    html[data-cyt-watch-playlist="horizontal"] ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer:not([collapsed]) ytd-playlist-panel-video-renderer {
+      flex: 0 0 210px !important;
       width: 210px !important;
+      min-width: 0 !important;
       margin: 0 !important;
     }
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-video-renderer #container {
-      flex-direction: column !important;
-      align-items: stretch !important;
-    }
-    /* Drop the drag-handle/index column and the per-item 3-dot for compact cards. */
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-video-renderer #index-container,
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-video-renderer #menu {
-      display: none !important;
-    }
-    /* Thumbnail: full-width 16:9 box on top. ytd-thumbnail has no intrinsic aspect
-       box (unlike the related cards), so give it one or the image collapses. */
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-video-renderer #thumbnail-container {
+    html[data-cyt-watch-playlist="horizontal"] ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer:not([collapsed]) ytd-playlist-panel-video-renderer #container { flex-direction: column !important; align-items: stretch !important; }
+    html[data-cyt-watch-playlist="horizontal"] ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer:not([collapsed]) ytd-playlist-panel-video-renderer #thumbnail-container {
       width: 100% !important;
       max-width: none !important;
+      height: auto !important;
+      max-height: none !important;
+      aspect-ratio: 16 / 9 !important;
       margin: 0 !important;
+      position: relative !important;
     }
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-video-renderer ytd-thumbnail,
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-video-renderer a#thumbnail {
+    html[data-cyt-watch-playlist="horizontal"] ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer:not([collapsed]) ytd-playlist-panel-video-renderer ytd-thumbnail,
+    html[data-cyt-watch-playlist="horizontal"] ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer:not([collapsed]) ytd-playlist-panel-video-renderer a#thumbnail {
       display: block !important;
       width: 100% !important;
-      height: auto !important;
-      aspect-ratio: 16 / 9 !important;
+      height: 100% !important;
+      max-height: none !important;
     }
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-video-renderer a#thumbnail yt-image,
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-video-renderer a#thumbnail img {
+    html[data-cyt-watch-playlist="horizontal"] ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer:not([collapsed]) ytd-playlist-panel-video-renderer a#thumbnail yt-image,
+    html[data-cyt-watch-playlist="horizontal"] ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer:not([collapsed]) ytd-playlist-panel-video-renderer a#thumbnail img {
       width: 100% !important;
       height: 100% !important;
       object-fit: cover !important;
     }
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-video-renderer #meta {
-      padding: 8px 2px 0 !important;
-    }
+    html[data-cyt-watch-playlist="horizontal"] ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer:not([collapsed]) ytd-playlist-panel-video-renderer #meta { padding: 8px 24px 0 2px !important; }
 
     /* =========================================================
        7. Description behind a toggle button.
@@ -492,16 +427,6 @@
       color: var(--yt-spec-call-to-action, #3ea6ff) !important;  /* accent when open */
     }
 
-    /* =========================================================
-       8. Mix carousel ◀ ▶ arrow buttons (injected by JS).
-       Overlaid on the Mix strip, shown on hover, click to scroll
-       the row horizontally — no wheel/keyboard needed, and no video
-       seek. The container is made position:relative so the absolutely
-       positioned buttons anchor to it.
-       ========================================================= */
-    ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer > #container {
-      position: relative !important;
-    }
     .cyt-mix-arrow {
       position: absolute;
       z-index: 60;
@@ -518,7 +443,8 @@
       opacity: 0;
       transition: opacity 0.15s ease;
     }
-    ytd-playlist-panel-renderer:hover .cyt-mix-arrow {
+    ytd-playlist-panel-renderer:hover .cyt-mix-arrow,
+    ytd-playlist-panel-renderer:focus-within .cyt-mix-arrow {
       opacity: 0.95;
     }
     .cyt-mix-arrow:hover {
@@ -551,8 +477,8 @@
        10. Disable the ambient glow ("cinematics") — the colored
        light that bleeds from the player into the page background.
        ========================================================= */
-    ytd-watch-flexy #cinematics,
-    ytd-watch-flexy #cinematics-container {
+    html[data-cyt-watch-ambient="off"] ytd-watch-flexy #cinematics,
+    html[data-cyt-watch-ambient="off"] ytd-watch-flexy #cinematics-container {
       display: none !important;
     }
 
@@ -647,6 +573,7 @@
 
           const btn = document.createElement('button');
           btn.id = BTN_ID;
+          btn.type = 'button';
           // Match the sibling pill buttons, but icon-only.
           btn.className = 'ytSpecButtonShapeNextHost ytSpecButtonShapeNextTonal ' +
             'ytSpecButtonShapeNextMono ytSpecButtonShapeNextSizeM ytSpecButtonShapeNextIconOnlyDefault';
@@ -684,6 +611,7 @@
         inject();
         let open = false;
         try { open = localStorage.getItem(KEY) === '1'; } catch (e) { /* ignore */ }
+        if (watchSettings.description !== 'remember') open = watchSettings.description === 'open';
         setOpen(open);
       }
 
@@ -693,6 +621,9 @@
       observer.observe(document.documentElement, { childList: true, subtree: true });
 
       window.addEventListener('yt-navigate-finish', sync);
+      window.addEventListener('cyt-watch-settings-changed', event => {
+        if (event.detail.includes('description')) sync();
+      });
 
       const start = () => sync();
       if (document.readyState === 'loading') {
@@ -702,156 +633,99 @@
       }
     })();
 
-    /* ===========================================================
-       Mix carousel wheel behaviour + debug logger.
-
-       A horizontal overflow container swallows the vertical mouse wheel (that's
-       why the page won't scroll while hovering the Mix). We attach a wheel handler:
-       a vertical-intent wheel scrolls the PAGE (so the page scrolls over the Mix),
-       while shift+wheel / trackpad horizontal deltas scroll the Mix sideways.
-
-       window.cytDebug() remains available in the console for on-demand layout
-       diagnostics, but no longer auto-logs.
-       =========================================================== */
     (function () {
-      'use strict';
+      const selector = 'html[data-cyt-watch-playlist="horizontal"] ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer:not([collapsed]) #items';
+      const controllers = new Map();
+      let pending = false;
 
-      const SVG_NS = 'http://www.w3.org/2000/svg';
-      const isWatch = () => location.pathname === '/watch';
-      const ITEMS_SEL = 'ytd-watch-flexy:not([fullscreen]) #secondary ytd-playlist-panel-renderer #items';
-
-      function attachWheel() {
-        if (!isWatch()) return;
-        const items = document.querySelector(ITEMS_SEL);
-        if (!items || items.dataset.cytWheel) return;
-        items.dataset.cytWheel = '1';
-        // Split the wheel by direction, explicitly (not relying on native, which was
-        // sending horizontal gestures to the page — where there's no sideways scroll —
-        // instead of the row):
-        //   • horizontal intent (trackpad deltaX, or Shift+wheel) → scroll the Mix
-        //   • vertical intent   (normal wheel)                    → scroll the page
-        items.addEventListener('wheel', (e) => {
-          const unitX = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? items.clientWidth : 1;
-          const unitY = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
-          const horizontal = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
-          if (horizontal) {
-            const d = e.shiftKey ? e.deltaY : e.deltaX;   // Shift maps vertical wheel → sideways
-            items.scrollLeft += d * unitX;
-          } else {
-            window.scrollBy(0, e.deltaY * unitY);
-          }
-          e.preventDefault();
-        }, { passive: false });
-      }
-
-      function chevron(dir) {
-        const svg = document.createElementNS(SVG_NS, 'svg');
-        svg.setAttribute('viewBox', '0 0 24 24');
-        const p = document.createElementNS(SVG_NS, 'path');
-        p.setAttribute('d', dir === 'left' ? 'M15 6l-6 6 6 6' : 'M9 6l6 6-6 6');
-        p.setAttribute('fill', 'none');
-        p.setAttribute('stroke', 'currentColor');
-        p.setAttribute('stroke-width', '2');
-        p.setAttribute('stroke-linecap', 'round');
-        p.setAttribute('stroke-linejoin', 'round');
-        svg.appendChild(p);
-        return svg;
-      }
-
-      function positionArrows(container, items) {
-        const mid = items.offsetTop + items.clientHeight / 2;
-        container.querySelectorAll('.cyt-mix-arrow').forEach((a) => {
-          a.style.top = mid + 'px';
-          a.style.transform = 'translateY(-50%)';
-        });
-      }
-
-      function updateArrowState(items, left, right) {
-        const max = items.scrollWidth - items.clientWidth;
-        left.toggleAttribute('disabled', items.scrollLeft <= 2);
-        right.toggleAttribute('disabled', items.scrollLeft >= max - 2);
-      }
-
-      function setupArrows() {
-        if (!isWatch()) return;
-        const items = document.querySelector(ITEMS_SEL);
-        if (!items) return;
+      function attach(items) {
         const container = items.closest('#container') || items.parentElement;
-        if (!container) return;
-
-        let left = container.querySelector('.cyt-mix-arrow-left');
-        let right = container.querySelector('.cyt-mix-arrow-right');
-        if (!left) {
-          const make = (dir) => {
-            const b = document.createElement('button');
-            b.className = 'cyt-mix-arrow cyt-mix-arrow-' + dir;
-            b.setAttribute('aria-label', dir === 'left' ? 'Scroll left' : 'Scroll right');
-            b.appendChild(chevron(dir));
-            b.addEventListener('click', (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              items.scrollBy({ left: (dir === 'left' ? -1 : 1) * items.clientWidth * 0.8, behavior: 'smooth' });
-            });
-            return b;
-          };
-          left = make('left');
-          right = make('right');
-          container.appendChild(left);
-          container.appendChild(right);
-          items.addEventListener('scroll', () => updateArrowState(items, left, right), { passive: true });
+        const abort = new AbortController();
+        const arrows = ['left', 'right'].map(direction => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'cyt-mix-arrow cyt-mix-arrow-' + direction;
+          button.setAttribute('aria-label', direction === 'left' ? 'Scroll left' : 'Scroll right');
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          svg.setAttribute('viewBox', '0 0 24 24');
+          svg.setAttribute('aria-hidden', 'true');
+          const path = document.createElementNS(svg.namespaceURI, 'path');
+          path.setAttribute('d', direction === 'left' ? 'M15 6l-6 6 6 6' : 'M9 6l6 6-6 6');
+          path.setAttribute('fill', 'none');
+          path.setAttribute('stroke', 'currentColor');
+          path.setAttribute('stroke-width', '2');
+          svg.appendChild(path);
+          button.appendChild(svg);
+          button.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            items.scrollBy({ left: (direction === 'left' ? -1 : 1) * items.clientWidth * 0.8,
+              behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+          }, { signal: abort.signal });
+          container.appendChild(button);
+          return button;
+        });
+        function update() {
+          const max = Math.max(0, items.scrollWidth - items.clientWidth);
+          const rtl = getComputedStyle(items).direction === 'rtl';
+          arrows[0].disabled = items.scrollLeft <= (rtl ? -max : 0) + 2;
+          arrows[1].disabled = items.scrollLeft >= (rtl ? 0 : max) - 2;
+          const top = items.getBoundingClientRect().top - container.getBoundingClientRect().top + items.clientHeight / 2;
+          for (const arrow of arrows) {
+            arrow.style.top = top + 'px';
+            arrow.style.transform = 'translateY(-50%)';
+          }
         }
-        positionArrows(container, items);
-        updateArrowState(items, left, right);
+        items.addEventListener('scroll', update, { passive: true, signal: abort.signal });
+        items.addEventListener('wheel', event => {
+          if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || !items.matches(selector)) return;
+          const horizontal = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY);
+          if (!horizontal || items.scrollWidth <= items.clientWidth) return;
+          const delta = event.shiftKey && Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+          const unit = event.deltaMode === 1 ? (parseFloat(getComputedStyle(items).lineHeight) || 16) : event.deltaMode === 2 ? items.clientWidth : 1;
+          items.scrollLeft += delta * unit;
+          event.preventDefault();
+        }, { passive: false, signal: abort.signal });
+        const resize = new ResizeObserver(update);
+        resize.observe(items);
+        resize.observe(container);
+        update();
+        return { container, arrows, update, dispose() {
+          abort.abort();
+          resize.disconnect();
+          for (const arrow of arrows) arrow.remove();
+        } };
       }
 
-      function cytDebug() {
-        const q = (s) => document.querySelector(s);
-        const cs = (el) => (el ? getComputedStyle(el) : null);
-        const header = q('#secondary ytd-playlist-panel-renderer .header');
-        const items = q(ITEMS_SEL) || q('#secondary ytd-playlist-panel-renderer #items');
-        const cont = items && items.parentElement;
-        const info = {
-          version: document.documentElement.dataset.cytVersion,
-          html_dark: document.documentElement.hasAttribute('dark'),
-          header_found: !!header,
-          header_bg: header && cs(header).backgroundColor,
-          items_found: !!items,
-          items_display: items && cs(items).display,
-          items_overflowX: items && cs(items).overflowX,
-          items_overflowY: items && cs(items).overflowY,
-          items_clientH: items && items.clientHeight,
-          items_scrollH: items && items.scrollHeight,
-          items_VERTICAL_TRAP: items && (items.scrollHeight > items.clientHeight + 1),
-          items_clientW: items && items.clientWidth,
-          items_scrollW: items && items.scrollWidth,
-          items_H_SCROLLABLE: items && (items.scrollWidth > items.clientWidth + 1),
-          items_wheelAttached: items && !!items.dataset.cytWheel,
-          parent_id: cont && (cont.id || cont.className),
-          parent_overflow: cont && cs(cont).overflow,
-        };
-        console.log('[Calm YouTube DEBUG]', JSON.stringify(info, null, 2));
-        return info;
+      function reconcile() {
+        pending = false;
+        const active = new Set(location.pathname === '/watch' ? document.querySelectorAll(selector) : []);
+        for (const [items, controller] of controllers) {
+          const container = items.closest('#container') || items.parentElement;
+          if (!active.has(items) || container !== controller.container || controller.arrows.some(arrow => arrow.parentElement !== container)) {
+            controller.dispose();
+            controllers.delete(items);
+          }
+        }
+        for (const items of active) {
+          if (!controllers.has(items)) controllers.set(items, attach(items));
+          else controllers.get(items).update();
+        }
       }
-      window.cytDebug = cytDebug;
-
-      const setup = () => { attachWheel(); setupArrows(); };
-
-      const observer = new MutationObserver(setup);
-      observer.observe(document.documentElement, { childList: true, subtree: true });
-
-      window.addEventListener('resize', () => {
-        const items = document.querySelector(ITEMS_SEL);
-        const container = items && (items.closest('#container') || items.parentElement);
-        if (container && items) positionArrows(container, items);
+      function schedule() {
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(reconcile);
+      }
+      new MutationObserver(schedule).observe(document.documentElement, {
+        childList: true, subtree: true, attributes: true, attributeFilter: ['fullscreen', 'collapsed', 'hidden'],
       });
-
-      const run = () => { setup(); };
-      window.addEventListener('yt-navigate-finish', run);
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', run);
-      } else {
-        run();
-      }
+      window.addEventListener('resize', schedule);
+      window.addEventListener('yt-navigate-finish', schedule);
+      window.addEventListener('cyt-watch-settings-changed', schedule);
+      window.cytDebug = () => ({ version: pageRoot.dataset.cytVersion, settings: { ...watchSettings },
+        carousels: [...controllers.keys()].map(items => ({ width: items.clientWidth, scrollWidth: items.scrollWidth, scrollLeft: items.scrollLeft })) });
+      schedule();
     })();
 
     (function () {
@@ -1169,6 +1043,12 @@
         const checkbox = document.getElementById('cyt-mixes-checkbox');
         if (select) select.value = root.dataset.cytColumns || 'auto';
         if (checkbox) checkbox.checked = root.classList.contains('cyt-hide-mixes');
+        for (const option of watchOptions) {
+          const input = document.getElementById('cyt-watch-' + option.key);
+          if (!input) continue;
+          input.value = watchSettings[option.key];
+          input.disabled = option.key === 'cards' && (watchSettings.layout !== 'tv' || watchSettings.recommendations === 'hide');
+        }
       }
 
       function applyColumns(value) {
@@ -1189,7 +1069,7 @@
           title.textContent = 'Görünüm';
           const label = document.createElement('label');
           label.htmlFor = 'cyt-columns-select';
-          label.textContent = 'Kart boyutu';
+          label.textContent = 'Ana sayfa kart boyutu';
           const select = document.createElement('select');
           select.id = 'cyt-columns-select';
           select.setAttribute('aria-describedby', 'cyt-columns-help');
@@ -1229,7 +1109,34 @@
           const pinsList = document.createElement('div');
           pinsList.id = 'cyt-pinned-settings-list';
           pinsSection.append(pinsTitle, choose, hint, pinsList);
-          panel.append(title, label, select, help, mixLabel, pinsSection);
+          const watchSection = document.createElement('section');
+          watchSection.id = 'cyt-watch-settings';
+          const watchTitle = document.createElement('h3');
+          watchTitle.textContent = 'Video sayfası';
+          watchSection.appendChild(watchTitle);
+          for (const option of watchOptions) {
+            const fieldLabel = document.createElement('label');
+            fieldLabel.htmlFor = 'cyt-watch-' + option.key;
+            fieldLabel.textContent = option.label;
+            const input = document.createElement('select');
+            input.id = fieldLabel.htmlFor;
+            for (const [value, text] of option.choices) {
+              const choice = document.createElement('option');
+              choice.value = value;
+              choice.textContent = text;
+              input.appendChild(choice);
+            }
+            input.addEventListener('change', () => {
+              watchSettings[option.key] = input.value;
+              try { localStorage.setItem(WATCH_KEY, JSON.stringify(watchSettings)); } catch {}
+              applyWatchSettings([option.key]);
+            });
+            watchSection.append(fieldLabel, input);
+          }
+          const watchHelp = document.createElement('p');
+          watchHelp.textContent = 'Kart boyutu geniş düzende uygulanır. Açıklama tercihi her yeni videoda kullanılır. Oynatma listesi menüleri korunur.';
+          watchSection.appendChild(watchHelp);
+          panel.append(title, label, select, help, mixLabel, watchSection, pinsSection);
           panel.addEventListener('toggle', (event) => {
             const gear = document.getElementById('cyt-settings-btn');
             if (gear) gear.setAttribute('aria-expanded', String(event.newState === 'open'));
@@ -1286,6 +1193,7 @@
         attributes: true, attributeFilter: ['href', 'title', 'aria-label'],
       });
       window.addEventListener('yt-navigate-finish', scheduleInject);
+      window.addEventListener('cyt-watch-settings-changed', syncSettings);
       window.addEventListener('storage', (event) => {
         try { if (event.storageArea !== localStorage) return; } catch { return; }
         if (event.key === PINS_KEY || event.key === null) pinnedChannels = parsePins(event.newValue);
