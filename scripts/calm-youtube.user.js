@@ -9,6 +9,8 @@
 // @run-at       document-start
 // @grant        GM_addStyle
 // @noframes
+// @updateURL    https://raw.githubusercontent.com/erkovany/Browserkit/main/scripts/calm-youtube.user.js
+// @downloadURL  https://raw.githubusercontent.com/erkovany/Browserkit/main/scripts/calm-youtube.user.js
 // ==/UserScript==
 
 (function () {
