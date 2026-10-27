@@ -2,7 +2,7 @@
 // @name         Calm YouTube (remove Shorts + grayscale thumbnails)
 // @namespace    https://github.com/erkovany/Browserkit
 // @homepageURL  https://github.com/erkovany/Browserkit
-// @version      2.15.0
+// @version      2.15.1
 // @description  Customize YouTube thumbnails, Shorts, comments, feeds, pinned channels and History. Video-page settings control layout, recommendations, card sizes, playlists, description defaults and ambient lighting.
 // @author       yerkovan
 // @match        https://www.youtube.com/*
@@ -20,17 +20,17 @@
   function startCalmYouTube() {
     const pageRoot = document.documentElement;
     if (!pageRoot) return false;
-    if (pageRoot.dataset.cytRunning === '2.15.0') return true;
-    pageRoot.dataset.cytRunning = '2.15.0';
+    if (pageRoot.dataset.cytRunning === '2.15.1') return true;
+    pageRoot.dataset.cytRunning = '2.15.1';
 
     const WATCH_KEY = 'cyt-watch-settings';
     const watchOptions = [
-      { key: 'layout', label: 'Sayfa düzeni', initial: 'tv', choices: [['native', 'YouTube varsayılanı'], ['tv', 'Geniş oynatıcı + altta öneriler']] },
+      { key: 'layout', label: 'Sayfa düzeni', initial: 'tv', choices: [['native', 'YouTube varsayılanı'], ['tv', 'Geniş · Öneriler altta']] },
       { key: 'recommendations', label: 'Önerileri göster', initial: 'show', choices: [['show', 'Açık'], ['hide', 'Kapalı']] },
-      { key: 'cards', label: 'Video altındaki kart boyutu', initial: 'medium', choices: [['small', 'Küçük'], ['medium', 'Orta'], ['large', 'Büyük']] },
+      { key: 'cards', label: 'Öneri kartı boyutu', initial: 'medium', choices: [['small', 'Küçük'], ['medium', 'Orta'], ['large', 'Büyük']] },
       { key: 'playlist', label: 'Oynatma listesi görünümü', initial: 'horizontal', choices: [['native', 'YouTube varsayılanı'], ['horizontal', 'Yatay şerit']] },
-      { key: 'description', label: 'Açıklamanın başlangıç durumu', initial: 'remember', choices: [['closed', 'Kapalı'], ['open', 'Açık'], ['remember', 'Son durumu hatırla']] },
-      { key: 'ambient', label: 'Arka plan ışığı (Ambient mode)', initial: 'off', choices: [['native', 'YouTube ayarını kullan'], ['off', 'Kapat']] },
+      { key: 'description', label: 'Açıklama başlangıcı', initial: 'remember', choices: [['closed', 'Kapalı'], ['open', 'Açık'], ['remember', 'Son durumu hatırla']] },
+      { key: 'ambient', label: 'Arka plan ışığı', initial: 'off', choices: [['native', 'YouTube ayarını kullan'], ['off', 'Kapat']] },
     ];
     function readWatchSettings() {
       let saved;
@@ -63,7 +63,7 @@
 
       // Version stamp — run `document.documentElement.dataset.cytVersion` in the
       // console to confirm which build Tampermonkey actually loaded.
-      document.documentElement.dataset.cytVersion = '2.15.0';
+      document.documentElement.dataset.cytVersion = '2.15.1';
 
       for (const key of ['cyt-color', 'cyt-shorts', 'cyt-comments', 'cyt-hide-mixes']) {
         try {
@@ -218,52 +218,152 @@
       display: none !important;
     }
     #cyt-settings-panel {
+      --cyt-menu: var(--yt-spec-menu-background, #fff);
+      --cyt-text: var(--yt-spec-text-primary, #0f0f0f);
+      --cyt-muted: var(--yt-spec-text-secondary, #606060);
+      --cyt-divider: var(--yt-spec-10-percent-layer, rgba(0, 0, 0, 0.1));
+      --cyt-hover: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05));
+      --cyt-accent: var(--yt-spec-call-to-action, #065fd4);
+      color-scheme: light;
       position: fixed;
       inset: 56px 16px auto auto;
       margin: 0;
-      padding: 20px;
-      width: min(360px, calc(100vw - 32px));
+      padding: 0 0 8px;
+      width: min(420px, calc(100vw - 32px));
+      max-height: calc(100vh - 72px);
+      max-height: calc(100dvh - 72px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: var(--cyt-muted) transparent;
       box-sizing: border-box;
-      border: 1px solid var(--yt-spec-10-percent-layer, #ccc);
+      border: 0;
       border-radius: 12px;
-      background: var(--yt-spec-menu-background, #fff);
-      color: var(--yt-spec-text-primary, #0f0f0f);
-      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
-      font: 14px/1.5 Roboto, Arial, sans-serif;
+      background: var(--cyt-menu);
+      color: var(--cyt-text);
+      box-shadow: 0 4px 32px rgba(0, 0, 0, 0.24);
+      font: 14px/1.4 Roboto, Arial, sans-serif;
     }
     html[dark] #cyt-settings-panel {
-      background: var(--yt-spec-menu-background, #282828);
-      color: var(--yt-spec-text-primary, #f1f1f1);
+      --cyt-menu: var(--yt-spec-menu-background, #282828);
+      --cyt-text: var(--yt-spec-text-primary, #f1f1f1);
+      --cyt-muted: var(--yt-spec-text-secondary, #aaa);
+      --cyt-divider: var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.1));
+      --cyt-hover: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.1));
+      --cyt-accent: var(--yt-spec-call-to-action, #3ea6ff);
+      color-scheme: dark;
     }
-    #cyt-watch-settings { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--yt-spec-10-percent-layer, #888); }
-    #cyt-watch-settings h3 { margin: 0 0 12px; font-size: 14px; }
-    #cyt-settings-panel select:disabled { opacity: 0.5; }
-    #cyt-settings-panel h2 { margin: 0 0 16px; font-size: 16px; }
-    #cyt-settings-panel label { display: block; }
+    #cyt-settings-panel .cyt-settings-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px 8px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--cyt-menu);
+      border-bottom: 1px solid var(--cyt-divider);
+    }
+    #cyt-settings-panel h2 { margin: 0; font-size: 16px; font-weight: 500; }
+    #cyt-settings-panel h3 { margin: 0; padding: 16px 20px 8px; color: var(--cyt-muted); font-size: 12px; font-weight: 500; }
+    #cyt-settings-panel section + section { margin-top: 8px; border-top: 1px solid var(--cyt-divider); }
+    #cyt-settings-panel .cyt-setting-row, #cyt-settings-panel .cyt-checkbox-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 48px;
+      padding: 6px 20px;
+      box-sizing: border-box;
+    }
+    #cyt-settings-panel .cyt-setting-row:hover, #cyt-settings-panel .cyt-checkbox-row:hover { background: var(--cyt-hover); }
+    #cyt-settings-panel .cyt-setting-row > label { flex: 1; min-width: 0; cursor: pointer; }
+    #cyt-settings-panel .cyt-select-wrap { position: relative; flex: 0 1 54%; min-width: 0; }
+    #cyt-settings-panel .cyt-select-wrap > svg { position: absolute; inset-inline-end: 2px; top: calc(50% - 9px); width: 18px; height: 18px; pointer-events: none; color: var(--cyt-muted); }
     #cyt-settings-panel select {
+      appearance: none;
       width: 100%;
-      margin: 8px 0;
-      padding: 8px;
-      border: 1px solid var(--yt-spec-10-percent-layer, #888);
-      border-radius: 6px;
-      background: inherit;
-      color: inherit;
+      min-height: 36px;
+      padding: 8px 24px 8px 8px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--cyt-muted);
       font: inherit;
+      text-align: end;
+      cursor: pointer;
+      text-overflow: ellipsis;
     }
-    #cyt-settings-panel option { background: var(--yt-spec-menu-background, #fff); color: var(--yt-spec-text-primary, #0f0f0f); }
-    html[dark] #cyt-settings-panel option { background: var(--yt-spec-menu-background, #282828); color: var(--yt-spec-text-primary, #f1f1f1); }
-    #cyt-settings-panel p { margin: 0 0 18px; font-size: 12px; opacity: 0.75; }
-    #cyt-settings-panel .cyt-checkbox-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-    #cyt-settings-panel input { width: 18px; height: 18px; margin: 0; accent-color: var(--yt-spec-call-to-action, #3ea6ff); }
-
-
-    #cyt-settings-panel { max-height: calc(100vh - 72px); overflow-y: auto; }
-    #cyt-pinned-settings { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--yt-spec-10-percent-layer, #888); }
-    #cyt-pinned-settings h3 { margin: 0 0 8px; font-size: 14px; }
-    #cyt-pinned-settings a { color: var(--yt-spec-call-to-action, #065fd4); }
-    #cyt-pinned-settings p { margin: 8px 0; }
-    #cyt-pinned-settings-list > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    #cyt-pinned-settings-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #cyt-settings-panel select:disabled { opacity: 0.45; cursor: default; }
+    #cyt-settings-panel option { background: var(--cyt-menu); color: var(--cyt-text); }
+    #cyt-settings-panel p { margin: 0; padding: 4px 20px 12px; color: var(--cyt-muted); font-size: 12px; line-height: 1.5; }
+    #cyt-settings-panel .cyt-checkbox-row { cursor: pointer; }
+    #cyt-settings-panel input[type="checkbox"] {
+      appearance: none;
+      position: relative;
+      order: 1;
+      flex: 0 0 36px;
+      width: 36px;
+      height: 20px;
+      margin: 0 4px 0 0;
+      border: 0;
+      border-radius: 12px;
+      background: var(--cyt-muted);
+      cursor: pointer;
+    }
+    #cyt-settings-panel input[type="checkbox"]::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--cyt-menu);
+      transition: transform 0.15s ease;
+    }
+    #cyt-settings-panel input[type="checkbox"]:checked { background: var(--cyt-accent); }
+    #cyt-settings-panel input[type="checkbox"]:checked::after { transform: translateX(16px); }
+    #cyt-settings-panel :is(select, input, button, a):focus-visible { outline: 2px solid var(--cyt-accent); outline-offset: 2px; }
+    #cyt-settings-panel #cyt-settings-close, #cyt-settings-panel #cyt-pinned-settings-list button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 36px;
+      width: 36px;
+      height: 36px;
+      padding: 8px;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--cyt-text);
+      cursor: pointer;
+    }
+    #cyt-settings-panel #cyt-settings-close:hover, #cyt-settings-panel #cyt-pinned-settings-list button:hover { background: var(--cyt-hover); }
+    #cyt-settings-close svg { width: 20px; height: 20px; }
+    #cyt-settings-panel #cyt-pinned-settings a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      margin: 0 12px 4px;
+      padding: 0 8px;
+      border-radius: 18px;
+      color: var(--cyt-accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    #cyt-settings-panel #cyt-pinned-settings a:hover { background: var(--cyt-hover); }
+    #cyt-settings-panel #cyt-pinned-settings-list > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; padding: 0 12px 0 20px; }
+    #cyt-settings-panel #cyt-pinned-settings-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    @media (max-width: 480px) {
+      #cyt-settings-panel .cyt-setting-row { flex-wrap: wrap; gap: 0; }
+      #cyt-settings-panel .cyt-setting-row > label { flex-basis: 100%; padding-top: 6px; }
+      #cyt-settings-panel .cyt-select-wrap { flex-basis: 100%; }
+      #cyt-settings-panel select { text-align: start; padding-inline-start: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #cyt-settings-panel input[type="checkbox"]::after { transition: none; }
+    }
     #cyt-pinned-settings-list button, .cyt-channel-pin {
       flex: 0 0 28px;
       width: 28px;
@@ -1056,6 +1156,16 @@
         else delete root.dataset.cytColumns;
       }
 
+      function settingRow(label, select) {
+        const row = document.createElement('div');
+        row.className = 'cyt-setting-row';
+        const control = document.createElement('div');
+        control.className = 'cyt-select-wrap';
+        control.append(select, makeIcon({ path: 'M6 9l6 6 6-6' }));
+        row.append(label, control);
+        return row;
+      }
+
       function ensureSettings() {
         let panel = document.getElementById('cyt-settings-panel');
         if (!panel) {
@@ -1067,9 +1177,21 @@
           const title = document.createElement('h2');
           title.id = 'cyt-settings-title';
           title.textContent = 'Görünüm';
+          const header = document.createElement('div');
+          header.className = 'cyt-settings-header';
+          const close = document.createElement('button');
+          close.type = 'button';
+          close.id = 'cyt-settings-close';
+          close.setAttribute('aria-label', 'Ayarları kapat');
+          close.appendChild(makeIcon({ path: 'M6 6l12 12M18 6L6 18' }));
+          close.addEventListener('click', () => {
+            panel.hidePopover();
+            document.getElementById('cyt-settings-btn')?.focus();
+          });
+          header.append(title, close);
           const label = document.createElement('label');
           label.htmlFor = 'cyt-columns-select';
-          label.textContent = 'Ana sayfa kart boyutu';
+          label.textContent = 'Kart boyutu';
           const select = document.createElement('select');
           select.id = 'cyt-columns-select';
           select.setAttribute('aria-describedby', 'cyt-columns-help');
@@ -1131,12 +1253,16 @@
               try { localStorage.setItem(WATCH_KEY, JSON.stringify(watchSettings)); } catch {}
               applyWatchSettings([option.key]);
             });
-            watchSection.append(fieldLabel, input);
+            watchSection.appendChild(settingRow(fieldLabel, input));
           }
           const watchHelp = document.createElement('p');
-          watchHelp.textContent = 'Kart boyutu geniş düzende uygulanır. Açıklama tercihi her yeni videoda kullanılır. Oynatma listesi menüleri korunur.';
+          watchHelp.textContent = 'Öneri kartı boyutu geniş düzende uygulanır. Açıklama tercihi her yeni videoda kullanılır.';
           watchSection.appendChild(watchHelp);
-          panel.append(title, label, select, help, mixLabel, watchSection, pinsSection);
+          const feedSection = document.createElement('section');
+          const feedTitle = document.createElement('h3');
+          feedTitle.textContent = 'Ana sayfa';
+          feedSection.append(feedTitle, settingRow(label, select), help, mixLabel);
+          panel.append(header, feedSection, watchSection, pinsSection);
           panel.addEventListener('toggle', (event) => {
             const gear = document.getElementById('cyt-settings-btn');
             if (gear) gear.setAttribute('aria-expanded', String(event.newState === 'open'));
