@@ -2,7 +2,7 @@
 // @name         Calm YouTube (remove Shorts + grayscale thumbnails)
 // @namespace    https://github.com/erkovany/Browserkit
 // @homepageURL  https://github.com/erkovany/Browserkit
-// @version      2.14.1
+// @version      2.14.2
 // @description  Calmer YouTube: pinned channel and History shortcuts, adjustable feed card sizes, optional Mix filter, toggle Shorts and comments, hide featured shelves and Premium/membership promo cards, toggle grayscale/color preview thumbnails from the masthead (color on hover in grayscale mode), a "TV" watch layout (comments hidden by default, related grid + Mix carousel below a big player), and a description toggle button. Colors come from YouTube's own theme (turn on Dark). Does not touch direct /shorts/ URLs or the video you're watching.
 // @author       yerkovan
 // @match        https://www.youtube.com/*
